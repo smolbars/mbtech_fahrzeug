@@ -1,0 +1,29 @@
+version="1.0.0"
+repository="mbtech/Fahrzeug"
+tag="latest"
+image="${repository}:${version}.${env.BUILD_NUMBER}"
+namespace="demo"
+
+pipeline {
+  agent any
+  stages {
+	
+	stage('Build Docker Image') {
+            container('docker') {
+                sh """
+                  docker build -t ${image} .
+                  cat /etc/.secret/password | docker login --password-stdin --username $DOCKER_USERNAME
+                  docker push ${image}
+                  docker tag ${image} ${repository}:${tag}
+                  docker push ${repository}:${tag}
+                """
+                milestone(1)
+            }
+        }
+        stage('Deploy Latest') {
+            container('kubectl') {
+                sh "kubectl patch -n ${namespace} deployment Fahrzeug -p '{\"spec\": { \"template\" : {\"spec\" : {\"containers\" : [{ \"name\" : \"Fahrzeug\", \"image\" : \"${image}\"}]}}}}'"
+                milestone(2)
+            }
+        }
+}
